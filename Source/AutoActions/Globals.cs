@@ -21,6 +21,8 @@ namespace AutoActions
 
         public static Logs Logs = new Logs($"{System.AppDomain.CurrentDomain.BaseDirectory}AutoActions.log", "AutoActions", Assembly.GetExecutingAssembly().GetName().Version.ToString(), false);
 
+        public static LogFile LogFile = new LogFile(Logs, $"{System.AppDomain.CurrentDomain.BaseDirectory}AutoActions.log", Assembly.GetExecutingAssembly().GetName().Version.ToString());
+
         public static int GlobalRefreshInterval = 500;
 
         private string SettingsPathCompatible => $"{System.AppDomain.CurrentDomain.BaseDirectory}UserSettings.xml";
@@ -93,7 +95,7 @@ namespace AutoActions
                 SaveSettings(true);
                 Globals.Logs.Add("Created new settings file", false);
             }
-            Globals.Logs.LogFileEnabled = Settings.CreateLogFile;
+            Globals.LogFile.Enabled = Settings.CreateLogFile;
             Globals.Logs.Add("Settings loaded", false);
         }
 

@@ -375,7 +375,7 @@ namespace AutoActions
             Monitors_CollectionChanged(Settings.Displays, new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, Settings.Displays.ToList()));
 
 
-            Globals.Logs.LogFileEnabled = Settings.CreateLogFile;
+            Globals.LogFile.Enabled = Settings.CreateLogFile;
             Globals.Logs.Add("Iniialized settings", false);
         }
 
@@ -572,7 +572,7 @@ namespace AutoActions
                 {
                     Globals.Logs.AddException(ex);
                 }
-                Globals.Logs.LogFileEnabled = Settings.CreateLogFile;
+                Globals.LogFile.Enabled = Settings.CreateLogFile;
                 Globals.Instance.SaveSettings();
             }
         }

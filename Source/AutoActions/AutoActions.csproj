@@ -325,6 +325,7 @@
     <Compile Include="Applications\ApplicationChangedEventArgs.cs" />
     <Compile Include="Applications\ApplicationProfileAssignment.cs" />
     <Compile Include="Info\AutoActionsLicense.cs" />
+    <Compile Include="Info\LogFile.cs" />
     <Compile Include="Info\LogsStorage.cs" />
     <Compile Include="Profiles\Actions\ActionEndResult.cs" />
     <Compile Include="Profiles\Actions\ActionTypeDescription.cs" />

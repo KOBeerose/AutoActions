@@ -117,8 +117,16 @@ namespace AutoActions
         {
             while (!_stopRequested)
             {
-                lock (_applicationsLock)
-                    UpdateApplications();
+                try
+                {
+                    lock (_applicationsLock)
+                        UpdateApplications();
+                }
+                catch (Exception ex)
+                {
+                    // E.g. a process exiting between the snapshot and a lookup; an unhandled exception here ends AutoActions.
+                    CallNewLog($"Process watcher: {ex.GetType().Name}: {ex.Message}");
+                }
                 Thread.Sleep(Globals.GlobalRefreshInterval);
             }
         }
@@ -138,68 +146,68 @@ namespace AutoActions
                 List<ApplicationItem> applications = _applications.Select(a => a.Key).ToList();
 
                 Process[] processes = Process.GetProcesses();
-
-                foreach (ApplicationItem application in applications)
+                int? foregroundProcessId = null;
+                try
                 {
-                    bool callNewRunning = false;
-                    bool callGotFocus = false;
-                    bool callLostFocus = false;
-                    bool callClosed = false;
-                    ApplicationState state = ApplicationState.None;
-                    ApplicationState oldState = _applications[application];
-                    foreach (var process in processes)
+                    foreach (ApplicationItem application in applications)
                     {
-                        string processName;
-                        if (process.ProcessName == "WWAHost")
+                        bool isRunning = false;
+                        bool isFocused = false;
+                        ApplicationState oldState = _applications[application];
+                        foreach (var process in processes)
                         {
-                            processName = UWP.WWAHostHandler.GetProcessName(process.Id);
-                        }
-                        else
-                            processName = process.ProcessName;
-                        if (application.ApplicationName.ToUpperInvariant().Equals(processName.ToUpperInvariant())
-                            || (application.IsUWP && !string.IsNullOrEmpty(application.UWPIdentity) && processName.Contains(application.UWPIdentity)))
-                        {
-
-                            state = ApplicationState.Running;
-
-                            if (oldState == ApplicationState.None)
-                                callNewRunning = true;
-                            if (IsFocusedApplication(process))
+                            string processName;
+                            if (process.ProcessName == "WWAHost")
                             {
-                                state = ApplicationState.Focused;
-                                if (oldState != ApplicationState.Focused)
-                                    callGotFocus = true;
+                                processName = UWP.WWAHostHandler.GetProcessName(process.Id);
                             }
                             else
+                                processName = process.ProcessName;
+                            if (application.ApplicationName.ToUpperInvariant().Equals(processName.ToUpperInvariant())
+                                || (application.IsUWP && !string.IsNullOrEmpty(application.UWPIdentity) && processName.Contains(application.UWPIdentity)))
                             {
-                                if (oldState == ApplicationState.Focused)
-                                    callLostFocus = true;
-
+                                isRunning = true;
+                                if (foregroundProcessId == null)
+                                    foregroundProcessId = GetForegroundProcessId();
+                                // Several processes can share the name (launcher + game); one focused is enough.
+                                // Letting a later unfocused one reset the state to Running re-fired GotFocus every tick.
+                                if (process.Id == foregroundProcessId)
+                                    isFocused = true;
                             }
                         }
-                    }
-                    if (state == ApplicationState.None && oldState != ApplicationState.None)
-                        callClosed = true;
+                        ApplicationState state = isFocused ? ApplicationState.Focused : isRunning ? ApplicationState.Running : ApplicationState.None;
 
-                    _applications[application] = state;
-                    if (callNewRunning)
-                        CallApplicationChanged(application, ApplicationChangedType.Started);
-                    if (callGotFocus)
-                        CallApplicationChanged(application, ApplicationChangedType.GotFocus);
-                    if (callLostFocus)
-                        CallApplicationChanged(application, ApplicationChangedType.LostFocus);
-                    if (callClosed)
-                        CallApplicationChanged(application, ApplicationChangedType.Closed);
+                        _applications[application] = state;
+                        if (isRunning && oldState == ApplicationState.None)
+                            CallApplicationChanged(application, ApplicationChangedType.Started);
+                        if (isFocused && oldState != ApplicationState.Focused)
+                            CallApplicationChanged(application, ApplicationChangedType.GotFocus);
+                        if (isRunning && !isFocused && oldState == ApplicationState.Focused)
+                            CallApplicationChanged(application, ApplicationChangedType.LostFocus);
+                        if (!isRunning && oldState != ApplicationState.None)
+                            CallApplicationChanged(application, ApplicationChangedType.Closed);
+                    }
+                }
+                finally
+                {
+                    foreach (Process process in processes)
+                        process.Dispose();
                 }
             }
         }
 
-        private bool IsFocusedApplication(Process process)
+        private int GetForegroundProcessId()
         {
-            Process currentProcess = GetForegroundProcess();
-            if (currentProcess == null)
-                return false;
-            return process.Id.Equals(currentProcess.Id);
+            try
+            {
+                using (Process foregroundProcess = GetForegroundProcess())
+                    return foregroundProcess?.Id ?? -1;
+            }
+            catch (ArgumentException)
+            {
+                // The foreground process exited in the meantime.
+                return -1;
+            }
         }
 
 
